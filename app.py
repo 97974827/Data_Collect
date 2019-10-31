@@ -60,10 +60,10 @@ try :
 
         # 485 쓰레드 설정
         get_charger_state = tch.get_charger_state(10)
-        update_vip = ps.update_vip(10)
+        # update_vip = ps.update_vip(10)
         dv.set_time()
-        dv.main_thread(4)
-        dv.thread_monitor(600)
+        dv.main_thread(1)
+        # dv.thread_monitor(10)
 
 finally:
     conn.close()
@@ -73,13 +73,15 @@ finally:
 class StartThread(Resource):
     # noinspection PyMethodMayBeStatic
     def post(self):
-        dv.USE = True
-        dv.USE_EACH = False
-        dv.TIME_USE = True
-        dv.TIME_USE_EACH = False
-        dv.device_state_thread.cancel()
-        dv.FLAG_MAIN = 'cancel'
-        dv.main_thread(4)
+        # dv.USE = True
+        # dv.USE_EACH = False
+        # dv.TIME_USE = True
+        # dv.TIME_USE_EACH = False
+        # dv.device_state_thread.cancel()
+        # dv.FLAG_MAIN = 'cancel'
+        # dv.main_thread(1)
+        dv.thread_monitor()
+        pass
 
 
 # 포스 설정 불러오기
@@ -100,13 +102,17 @@ class ResetTotalMoney(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         parser = reqparse.RequestParser()
         parser.add_argument('device_type', type=str)
         parser.add_argument('device_addr', type=str)
         args = parser.parse_args()
         device_type = args['device_type']
         device_addr = args['device_addr']
+        time.sleep(0.5)
         res = dv.reset_total_money(device_type, device_addr)
+        # time.sleep(0.1)
+        # dv.main_thread(1)
         return {'result': res}
 
 
@@ -120,6 +126,7 @@ class ChangeDeviceAddr(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         parser = reqparse.RequestParser()
         # 디바이스 정보
         parser.add_argument('device_type', type=str)
@@ -131,7 +138,8 @@ class ChangeDeviceAddr(Resource):
         after_addr = args['after_addr']
         time.sleep(0.5)
         res = dv.change_device_addr(device_type, before_addr, after_addr)
-        time.sleep(0.5)
+        time.sleep(0.6)
+        dv.main_thread(1)
         # 디바이스에서 전송된 값 전송
         return {'result': res}
 
@@ -146,7 +154,10 @@ class GetGarageConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         garage_config = dv.get_garage_config()
+        # time.sleep(0.1)
+        # dv.main_thread(1)
         return garage_config
 
 
@@ -160,7 +171,10 @@ class GetSelfConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         self_config = dv.get_self_config()
+        # time.sleep(0.1)
+        # dv.main_thread(1)
         return self_config
 
 
@@ -174,7 +188,10 @@ class GetAirConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         air_config = dv.get_air_config()
+        # time.sleep(0.1)
+        # dv.main_thread(1)
         return air_config
 
 
@@ -188,7 +205,10 @@ class GetMateConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         mate_config = dv.get_mate_config()
+        # time.sleep(0.1)
+        # dv.main_thread(1)
         return mate_config
 
 
@@ -202,7 +222,10 @@ class GetChargerConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         config = dv.get_charger_config()
+        # time.sleep(0.1)
+        # dv.main_thread(1)
         return config
 
 
@@ -211,6 +234,8 @@ class GetReaderConfig(Resource):
     # noinspection PyMethodMayBeStatic
     def post(self):
         reader_config = dv.get_reader_config()
+        time.sleep(0.1)
+        dv.main_thread(1)
         return {"reader_config": reader_config}
 
 
@@ -224,7 +249,10 @@ class GetTouchConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         res = tch.get_touch_config()
+        time.sleep(0.1)
+        dv.main_thread(1)
         return {"result": res}
 
 
@@ -238,7 +266,10 @@ class GetKioskConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         res = ps.get_kiosk_config()
+        time.sleep(0.1)
+        dv.main_thread(1)
         return {'result': res}
 
 
@@ -252,6 +283,7 @@ class SetGarageConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         parser = reqparse.RequestParser()
         # 디바이스 정보
         parser.add_argument('device_addr', type=str)
@@ -283,6 +315,7 @@ class SetGarageConfig(Resource):
 
         args = parser.parse_args()
         res = dv.set_garage_config(args)
+        time.sleep(1)
         return {'result': res}
 
 
@@ -296,6 +329,7 @@ class SetSelfConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         parser = reqparse.RequestParser()
         # 디바이스 정보
         parser.add_argument('device_addr', type=str)
@@ -350,6 +384,7 @@ class SetSelfConfig(Resource):
         args = parser.parse_args()
 
         res = dv.set_self_config(args)
+        time.sleep(1)
 
         # 디바이스에서 전송된 값 전송
         return {'result': res}
@@ -365,6 +400,7 @@ class SetAirConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         parser = reqparse.RequestParser()
         parser.add_argument('device_addr', type=str)
         parser.add_argument('air_init_money', type=str)
@@ -380,6 +416,7 @@ class SetAirConfig(Resource):
         args = parser.parse_args()
 
         res = dv.set_air_config(args)
+        time.sleep(1)
 
         # 디바이스에서 전송된 값 전송
         return {'result': res}
@@ -395,6 +432,7 @@ class SetMateConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         parser = reqparse.RequestParser()
         parser.add_argument('device_addr', type=str)
         parser.add_argument('mate_init_money', type=str)
@@ -411,6 +449,7 @@ class SetMateConfig(Resource):
         args = parser.parse_args()
 
         res = dv.set_mate_config(args)
+        time.sleep(1)
 
         # 디바이스에서 전송된 값 전송
         return {'result': res}
@@ -426,6 +465,7 @@ class SetChargerConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         parser = reqparse.RequestParser()
         parser.add_argument('device_addr', type=str)
         parser.add_argument('card_min_price', type=str)
@@ -446,6 +486,7 @@ class SetChargerConfig(Resource):
         args = parser.parse_args()
 
         res = dv.set_charger_config(args)
+        time.sleep(1)
 
         # 디바이스에서 전송된 값 전송
         return {'result': res}
@@ -461,6 +502,7 @@ class SetReaderConfig(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         parser = reqparse.RequestParser()
 
         parser.add_argument('query', type=str)
@@ -595,16 +637,16 @@ class SetPosConfig(Resource):
 class GetDeviceState(Resource):
     # noinspection PyMethodMayBeStatic
     def post(self):
-        dv.USE = True
-        dv.USE_EACH = False
-        dv.TIME_USE = True
-        dv.TIME_USE_EACH = False
-        dv.device_state_thread.cancel()
-        dv.device_state_thread.join()
+        # dv.USE = True
+        # dv.USE_EACH = False
+        # dv.TIME_USE = True
+        # dv.TIME_USE_EACH = False
+        # dv.device_state_thread.cancel()
+        # dv.device_state_thread.join()
         dv.USE = False
         dv.USE_EACH = True
-        dv.FLAG_MAIN = "monitor"
-        res = dv.get_device_state(dv.FLAG_MAIN)
+        # dv.FLAG_MAIN = "monitor"
+        res = dv.get_device_state()
         return {'result': res}
 
 
@@ -949,13 +991,17 @@ class UpdateShopNo(Resource):
         dv.TIME_USE_EACH = False
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         parser = reqparse.RequestParser()
         parser.add_argument('device_type', type=str)
         parser.add_argument('device_addr', type=str)
         args = parser.parse_args()
         device_type = args['device_type']
         device_addr = args['device_addr']
+        time.sleep(0.5)
         res = dv.update_shop_no(device_type, device_addr)
+        # time.sleep(0.1)
+        # dv.main_thread(1)
         return {'result': res}
 
 
@@ -1281,3 +1327,18 @@ api.add_resource(GetCreditDaysSales, '/get_credit_days_sales')          # 신용
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0")
+
+    # try:
+    #     # 데이터베이스 접속 설정
+    #     conn = pymysql.connect(host=gls_config.MYSQL_HOST, user=gls_config.MYSQL_USER, password=gls_config.MYSQL_PWD,
+    #                            charset=gls_config.MYSQL_SET, db=gls_config.MYSQL_DB)
+    #     curs = conn.cursor(pymysql.cursors.DictCursor)
+    #     with conn.cursor():
+    #
+    #
+    #         get_charger_state = tch.get_charger_state(10)
+    #         update_vip = ps.update_vip(10)
+    #         dv.thread_monitor(600)
+    #
+    # finally:
+    #     conn.close()

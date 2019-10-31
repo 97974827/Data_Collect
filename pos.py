@@ -2362,22 +2362,30 @@ class Pos:
         # 장비 번호 카운트
         device_addr_qry = "SELECT `addr` FROM gl_device_list WHERE `type` = %s ORDER BY `addr` ASC"
 
-        # 장비 이력 조회 쿼리
-        get_use_device_qry = "SELECT SUM(`cash`) * 100 AS 'cash', SUM(`card`) * 100 AS 'card', `device_type`, " \
-                             " SUM(`time`) AS 'time', SUM(`master_card`) * 100 AS 'master'" \
-                             " FROM gl_sales_list " \
-                             " WHERE `device_type` = %s " \
-                             " AND `device_addr` = %s "
+        # 충전 장비 이력 조회 쿼리
+        # get_use_device_qry = "SELECT SUM(`cash`) * 100 AS 'cash', SUM(`card`) * 100 AS 'card', `device_type`, " \
+        #                      " SUM(`time`) AS 'time', SUM(`master_card`) * 100 AS 'master'" \
+        #                      " FROM gl_sales_list " \
+        #                      " WHERE `device_type` = %s " \
+        #                      " AND `device_addr` = %s "
+        get_use_device_qry = "SELECT d_list.addr AS 'device_addr', sum(charger.current_charge) * 100 AS 'cash', " \
+                             "sum(charger.exhaust_money) * 100 AS 'master' " \
+                             "FROM gl_charger_state AS charger " \
+                             "INNER JOIN gl_device_list AS d_list " \
+                             "ON charger.device_no = d_list.`no`" \
+                             "WHERE d_list.type = %s and d_list.addr = %s"
 
         try:
             with conn.cursor():
                 # 셀프
                 # 장비명
                 curs.execute(device_name_qry, gls_config.SELF)
-                self_name_temp = curs.fetchall()
+                # self_name_temp = curs.fetchall()
+                self_name_temp = curs.fetchone()
 
-                for row in self_name_temp:
-                    self_name = row['name']
+                self_name = self_name_temp['name']
+                # for row in self_name_temp:
+                #     self_name = row['name']
 
                 # 장비 주소
                 curs.execute(device_addr_qry, gls_config.SELF)
@@ -2385,7 +2393,14 @@ class Pos:
 
                 # 장비 주소 별 매출
                 for row in self_addr:
-                    curs.execute(get_use_device_qry, (gls_config.SELF, row['addr']))
+
+                    # 셀프 매출 추출
+                    get_self_qry = "SELECT self.`device_addr`, sum(self.`use_cash`) * 100 AS 'cash', " \
+                                   "sum(self.`use_card`) * 100 AS 'card', " \
+                                   "sum(self.`master_card`) * 100 AS 'master' " \
+                                   "FROM gl_self_state AS self WHERE self.device_addr = %s"
+
+                    curs.execute(get_self_qry, row['addr'])
                     self_res = curs.fetchall()
 
                     for self_row in self_res:
@@ -2407,8 +2422,8 @@ class Pos:
                             self_sales['cash'] = int(self_row['cash'])
                         if self_row['card']:
                             self_sales['card'] = int(self_row['card'])
-                        if self_row['time']:
-                            self_sales['time'] = int(self_row['time'])
+                        if self_row['master']:
+                            self_sales['master'] = int(self_row['master'])
 
                         # 반환할 리스트에 저장
                         device_sales_list.append(self_sales)
@@ -2416,10 +2431,11 @@ class Pos:
                 # 진공
                 # 장비명
                 curs.execute(device_name_qry, gls_config.AIR)
-                air_name_temp = curs.fetchall()
+                air_name_temp = curs.fetchone()
 
-                for row in air_name_temp:
-                    air_name = row['name']
+                air_name = air_name_temp['name']
+                # for row in air_name_temp:
+                #     air_name = row['name']
 
                 # 장비 주소
                 curs.execute(device_addr_qry, gls_config.AIR)
@@ -2427,7 +2443,13 @@ class Pos:
 
                 # 장비 주소 별 매출
                 for row in air_addr:
-                    curs.execute(get_use_device_qry, (gls_config.AIR, row['addr']))
+
+                    get_air_ary = "SELECT air.`device_addr`, sum(air.`air_cash`) * 100 AS 'cash', " \
+                                  "sum(air.`air_card`) * 100 AS 'card', " \
+                                  "sum(air.`master_card`) * 100 AS 'master' " \
+                                  "FROM gl_air_state AS air WHERE air.device_addr = %s"
+
+                    curs.execute(get_air_ary, row['addr'])
                     air_res = curs.fetchall()
 
                     for air_row in air_res:
@@ -2449,8 +2471,8 @@ class Pos:
                             air_sales['cash'] = int(air_row['cash'])
                         if air_row['card']:
                             air_sales['card'] = int(air_row['card'])
-                        if air_row['time']:
-                            air_sales['time'] = int(air_row['time'])
+                        if air_row['master']:
+                            air_sales['master'] = int(air_row['master'])
 
                         # 반환할 리스트에 저장
                         device_sales_list.append(air_sales)
@@ -2458,10 +2480,11 @@ class Pos:
                 # 매트
                 # 장비명
                 curs.execute(device_name_qry, gls_config.MATE)
-                mate_name_temp = curs.fetchall()
+                mate_name_temp = curs.fetchone()
 
-                for row in mate_name_temp:
-                    mate_name = row['name']
+                # for row in mate_name_temp:
+                #     mate_name = row['name']
+                mate_name = mate_name_temp['name']
 
                 # 장비 주소
                 curs.execute(device_addr_qry, gls_config.MATE)
@@ -2469,7 +2492,13 @@ class Pos:
 
                 # 장비 주소 별 매출
                 for row in mate_addr:
-                    curs.execute(get_use_device_qry, (gls_config.MATE, row['addr']))
+
+                    get_mate_ary = "SELECT mate.`device_addr`, sum(mate.`mate_cash`) * 100 AS 'cash', " \
+                                  "sum(mate.`mate_card`) * 100 AS 'card', " \
+                                  "sum(mate.`master_card`) * 100 AS 'master' " \
+                                  "FROM gl_mate_state AS mate WHERE mate.device_addr = %s"
+
+                    curs.execute(get_mate_ary, row['addr'])
                     mate_res = curs.fetchall()
 
                     for mate_row in mate_res:
@@ -2490,59 +2519,60 @@ class Pos:
                             mate_sales['cash'] = int(mate_row['cash'])
                         if mate_row['card']:
                             mate_sales['card'] = int(mate_row['card'])
-                        if mate_row['time']:
-                            mate_sales['time'] = int(mate_row['time'])
+                        if mate_row['master']:
+                            mate_sales['master'] = int(mate_row['master'])
 
                         # 반환할 리스트에 저장
                         device_sales_list.append(mate_sales)
 
-                # 매트(리더)
-                # 장비명
-                curs.execute(device_name_qry, gls_config.READER)
-                reader_name_temp = curs.fetchall()
-                for row in reader_name_temp:
-                    reader_name = row['name']
-                # 장비 주소
-                curs.execute(device_addr_qry, gls_config.READER)
-                reader_addr = curs.fetchall()
-
-                # 장비 주소 별 매출
-                for row in reader_addr:
-                    curs.execute(get_use_device_qry, (gls_config.READER, row['addr']))
-                    reader_res = curs.fetchall()
-
-                    for reader_row in reader_res:
-                        # 값을 저장할 딕셔너리 초기화
-                        reader_sales = OrderedDict()
-                        reader_sales['device_addr'] = '0'
-                        reader_sales['device_name'] = '0'
-                        reader_sales['device_type'] = gls_config.READER
-                        reader_sales['time'] = '0'
-                        reader_sales['cash'] = '0'
-                        reader_sales['card'] = '0'
-
-                        # 실제 값 저장
-                        reader_sales['device_addr'] = row['addr']
-                        reader_sales['device_name'] = reader_name
-
-                        # 소수점 절삭
-                        if reader_row['cash']:
-                            reader_sales['cash'] = int(reader_row['cash'])
-                        if reader_row['card']:
-                            reader_sales['card'] = int(reader_row['card'])
-                        if reader_row['time']:
-                            reader_sales['time'] = int(reader_row['time'])
-
-                        # 반환할 리스트에 저장
-                        device_sales_list.append(reader_sales)
+                # # 매트(리더)
+                # # 장비명
+                # curs.execute(device_name_qry, gls_config.READER)
+                # reader_name_temp = curs.fetchall()
+                # for row in reader_name_temp:
+                #     reader_name = row['name']
+                # # 장비 주소
+                # curs.execute(device_addr_qry, gls_config.READER)
+                # reader_addr = curs.fetchall()
+                #
+                # # 장비 주소 별 매출
+                # for row in reader_addr:
+                #     curs.execute(get_use_device_qry, (gls_config.READER, row['addr']))
+                #     reader_res = curs.fetchall()
+                #
+                #     for reader_row in reader_res:
+                #         # 값을 저장할 딕셔너리 초기화
+                #         reader_sales = OrderedDict()
+                #         reader_sales['device_addr'] = '0'
+                #         reader_sales['device_name'] = '0'
+                #         reader_sales['device_type'] = gls_config.READER
+                #         reader_sales['time'] = '0'
+                #         reader_sales['cash'] = '0'
+                #         reader_sales['card'] = '0'
+                #
+                #         # 실제 값 저장
+                #         reader_sales['device_addr'] = row['addr']
+                #         reader_sales['device_name'] = reader_name
+                #
+                #         # 소수점 절삭
+                #         if reader_row['cash']:
+                #             reader_sales['cash'] = int(reader_row['cash'])
+                #         if reader_row['card']:
+                #             reader_sales['card'] = int(reader_row['card'])
+                #         if reader_row['time']:
+                #             reader_sales['time'] = int(reader_row['time'])
+                #
+                #         # 반환할 리스트에 저장
+                #         device_sales_list.append(reader_sales)
 
                 # Garage
                 # 장비명
                 curs.execute(device_name_qry, gls_config.GARAGE)
-                garage_name_temp = curs.fetchall()
+                garage_name_temp = curs.fetchone()
 
-                for row in garage_name_temp:
-                    garage_name = row['name']
+                # for row in garage_name_temp:
+                #     garage_name = row['name']
+                garage_name = garage_name_temp['name']
 
                 # 장비 주소
                 curs.execute(device_addr_qry, gls_config.GARAGE)
@@ -2550,7 +2580,13 @@ class Pos:
 
                 # 장비 주소 별 매출
                 for row in garage_addr:
-                    curs.execute(get_use_device_qry, (gls_config.GARAGE, row['addr']))
+
+                    get_garage_qry = "SELECT garage.`device_addr`,sum(garage.`use_cash`) * 100 AS 'cash', " \
+                                     "sum(garage.`use_card`) * 100 AS 'card', " \
+                                     "sum(garage.`use_master`) * 100 AS 'master' " \
+                                     "FROM gl_garage_state AS garage WHERE garage.device_addr = %s"
+
+                    curs.execute(get_garage_qry, row['addr'])
                     garage_res = curs.fetchall()
 
                     for garage_row in garage_res:
@@ -2572,8 +2608,8 @@ class Pos:
                             garage_sales['cash'] = int(garage_row['cash'])
                         if garage_row['card']:
                             garage_sales['card'] = int(garage_row['card'])
-                        if garage_row['time']:
-                            garage_sales['time'] = int(garage_row['time'])
+                        if garage_row['master']:
+                            garage_sales['master'] = int(garage_row['master'])
 
                         # 반환할 리스트에 저장
                         device_sales_list.append(garage_sales)
@@ -2581,10 +2617,11 @@ class Pos:
                 # 충전기
                 # 장비명
                 curs.execute(device_name_qry, gls_config.CHARGER)
-                charger_name_temp = curs.fetchall()
+                charger_name_temp = curs.fetchone()
 
-                for row in charger_name_temp:
-                    charger_name = row['name']
+                # for row in charger_name_temp:
+                #     charger_name = row['name']
+                charger_name = charger_name_temp['name']
 
                 # 장비 주소
                 curs.execute(device_addr_qry, gls_config.CHARGER)
@@ -2592,6 +2629,7 @@ class Pos:
 
                 # 장비 주소 별 매출
                 for row in charger_addr:
+
                     curs.execute(get_use_device_qry, (gls_config.CHARGER, row['addr']))
                     charger_res = curs.fetchall()
 
@@ -2616,10 +2654,12 @@ class Pos:
                 # 터치
                 # 장비명
                 curs.execute(device_name_qry, gls_config.TOUCH)
-                touch_name_temp = curs.fetchall()
+                # touch_name_temp = curs.fetchall()
+                touch_name_temp = curs.fetchone()
 
-                for row in touch_name_temp:
-                    touch_name = row['name']
+                # for row in touch_name_temp:
+                #     touch_name = row['name']
+                touch_name = touch_name_temp['name']
                 # 장비 주소
                 curs.execute(device_addr_qry, gls_config.TOUCH)
                 touch_addr = curs.fetchall()
@@ -2650,9 +2690,11 @@ class Pos:
                 # Kiosk
                 # 장비명
                 curs.execute(device_name_qry, gls_config.KIOSK)
-                kiosk_name_temp = curs.fetchall()
-                for row in kiosk_name_temp:
-                    kiosk_name = row['name']
+                kiosk_name_temp = curs.fetchone()
+
+                # for row in kiosk_name_temp:
+                #     kiosk_name = row['name']
+                kiosk_name = kiosk_name_temp['name']
 
                 # 장비 주소
                 curs.execute(device_addr_qry, gls_config.KIOSK)
@@ -2956,7 +2998,7 @@ class Pos:
 
     # noinspection PyMethodMayBeStatic
     def get_card_history(self):
-        # 데이터베이스 접속 설정ps
+        # 데이터베이스 접속 설정
         conn = pymysql.connect(host=gls_config.MYSQL_HOST, user=gls_config.MYSQL_USER, password=gls_config.MYSQL_PWD,
                                charset=gls_config.MYSQL_SET, db=gls_config.MYSQL_DB)
         curs = conn.cursor(pymysql.cursors.DictCursor)
@@ -2964,11 +3006,8 @@ class Pos:
         try:
             with conn.cursor():
                 # 이력 조회 쿼리
-                query = "SELECT card.`card_num`, " \
-                        "IFNULL((select `mb_no` FROM gl_member_card WHERE `num` = card.card_num ORDER BY `input_date` DESC LIMIT 1), 0) AS 'mb_no', " \
-                        "IFNULL((select sum(`current_charge`) * 100 AS 'total_charge' FROM gl_charger_state WHERE card_num = card.card_num), 0) AS 'total_charge', " \
-                        "IFNULL((SELECT `remain_card` * 100 AS 'remain_card' FROM gl_sales_list WHERE card_num = card.card_num ORDER BY `end_time` DESC LIMIT 1), 0) AS 'remain_card', " \
-                        "IFNULL((SELECT UNIX_TIMESTAMP(`end_time`) AS 'end_time' FROM gl_sales_list WHERE card_num = card.card_num ORDER BY `end_time` DESC LIMIT 1), 0) AS 'end_time', UNIX_TIMESTAMP(card.input_date) as 'input_date' " \
+                query = "SELECT card.`card_num`, UNIX_TIMESTAMP(card.`input_date`) AS 'input_date', " \
+                        "IFNULL((select `mb_no` FROM gl_member_card WHERE `num` = card.card_num ORDER BY `input_date` DESC LIMIT 1), 0) AS 'mb_no'" \
                         "FROM gl_card as card WHERE NOT card.card_num in('00000000') ORDER BY input_date DESC"
                 curs.execute(query)
                 card_history = curs.fetchall()
@@ -4438,6 +4477,7 @@ class Pos:
 
     # noinspection PyMethodMayBeStatic
     def update_vip(self, second=10):
+        print("update_vip_thread")
         # 데이터베이스 접속 설정
         conn = pymysql.connect(host=gls_config.MYSQL_HOST, user=gls_config.MYSQL_USER, password=gls_config.MYSQL_PWD,
                                charset=gls_config.MYSQL_SET, db=gls_config.MYSQL_DB)
@@ -4465,8 +4505,9 @@ class Pos:
                         curs.execute(update_vip_qry, ('1', get_member['no']))
                         conn.commit()
 
-        # except Exception as e:
-        #     print(e)
+        except Exception as e:
+            print(e)
+            return
         finally:
             conn.close()
             threading.Timer(second, self.update_vip).start()  # 쓰레드 재귀 호출

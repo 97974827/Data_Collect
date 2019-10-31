@@ -453,6 +453,7 @@ class TouchCharger:
                 for row in res:
                     # 터치 충전기 통신 테스트
                     connect = self.get_connect(row['ip'])
+                    print("연결 상태 : ",  connect)
 
                     if connect == 1:
                         # 터치 충전기 접속 설정

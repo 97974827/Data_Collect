@@ -57,6 +57,27 @@ class Device:
     PORT = "/dev/ttyS0"  # COM 1
     BAUD = "9600"
 
+    # # 485 Thread 버퍼
+    # global temp_state
+    # temp_state = OrderedDict()
+    # temp_state['state'] = '0'  # 동작 상태
+    # temp_state['start_time'] = '0'  # 시작 시간
+    # temp_state['current_cash'] = '0'  # 투입금액 - 현금
+    # temp_state['current_card'] = '0'  # 투입금액 - 카드
+    # temp_state['current_master'] = '0'  # 투입금액 - 마스터
+    # temp_state['use_cash'] = '0'  # 사용금액 - 현금
+    # temp_state['use_card'] = '0'  # 사용금액 - 카드
+    # temp_state['use_master'] = '0'  # 사용금액 - 마스터
+    # temp_state['remain_time'] = '0'  # 남은 시간
+    # temp_state['card_num'] = '0'  # 카드번호
+    # temp_state['sales'] = '0'  # 당일 매출
+    # temp_state['connect'] = '0'  # 통신 상태
+    #
+    # global state_list
+    # state_list = []
+
+
+
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     1. 메인 스레드
     get_device_state 함수를 실행 시키는 스레드로서 485통신의 메인 부분.
@@ -66,9 +87,9 @@ class Device:
     시간 설정 명령과 충돌이 나지 않도록 방지한다.
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     # noinspection PyMethodMayBeStatic
-    def main_thread(self, second=4):
+    def main_thread(self, second=1):
         try:
-            time.sleep(1)
+            time.sleep(0.1)
             self.USE = False
             self.USE_EACH = True
             self.TIME_USE = False
@@ -76,7 +97,7 @@ class Device:
             self.device_state_thread = threading.Timer(second, self.main_thread)
             self.device_state_thread.daemon = True
             self.FLAG_MAIN = "thread"
-            self.get_device_state(self.FLAG_MAIN)
+            self.get_device_state_thread(self.FLAG_MAIN)
             self.device_state_thread.start()
         except Exception as e:
             print("From Main_thread except : ", e)
@@ -91,6 +112,7 @@ class Device:
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     # noinspection PyMethodMayBeStatic
     def set_time(self):
+        print("set_time")
         # Raise 명령을 통해 강제로 에러를 발생시켜서 함수를 종료시킨다.
         if self.TIME_USE:
             try:
@@ -162,7 +184,7 @@ class Device:
     두 가지 방식이 있으며 flag에 의해 구분된다.
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     # noinspection PyMethodMayBeStatic
-    def get_device_state(self, flag):
+    def get_device_state_thread(self, flag):
         if self.USE:
             try:
                 print("get_device_state stop")
@@ -188,7 +210,10 @@ class Device:
                 self.FLAG_STATE = 'start'
 
                 # 반환 배열
+                global state_list
                 state_list = []
+                # state_list.clear()
+
 
                 # RS-485 연결
                 ser = serial.Serial(self.PORT, self.BAUD, timeout= 0.1)
@@ -207,11 +232,6 @@ class Device:
 
                 # 정지카드 검사 쿼리
                 check_black_card_qry = "SELECT count(*) AS 'check' FROM gl_card_blacklist WHERE `card_num` = %s"
-
-                # 금일 매출 추출
-                get_sales_qry = "SELECT (SUM(`cash`) + SUM(`card`)) * 100 AS 'sales' " \
-                                "FROM gl_sales_list WHERE `end_time` > date_format(curdate( ), '%%Y-%%m-%%d' ) " \
-                                "AND `device_type` = %s AND `device_addr` = %s"
 
                 for device in device_list:
                     if self.USE_EACH:
@@ -263,6 +283,7 @@ class Device:
                                         state = orgin.replace(" ", "0")
                                         break
                                 stx = state[0:2]
+
                                 state_len = len(state)
 
                                 if stx == 'GL':
@@ -271,13 +292,45 @@ class Device:
                                     # 통신 상태 저장
                                     temp_state['connect'] = '1'
 
-                                    # 금일 매출 저장
-                                    curs.execute(get_sales_qry, (device['type'], device['addr']))
-                                    get_sales_res = curs.fetchall()
+                                    # 셀프 금일 매출 저장
+                                    if state[5] == 'S':
+                                        get_self_sales_q = "SELECT (SUM(`use_cash`) + SUM(`use_card`)) * 100 AS 'sales' FROM gl_self_state " \
+                                                           "WHERE `end_time` > date_format(curdate( ), '%%Y-%%m-%%d' ) AND `device_addr` = %s"
+                                        curs.execute(get_self_sales_q, device['addr'])
+                                        self_res = curs.fetchone()
 
-                                    for get_sales in get_sales_res:
-                                        if get_sales['sales']:
-                                            temp_state['sales'] = int(get_sales['sales'])
+                                        if self_res['sales']:
+                                            temp_state['sales'] = int(self_res['sales'])
+
+                                    # Garage 금일 매출 저장
+                                    if state[5] == 'G':
+                                        get_garage_sales_q = "SELECT (SUM(`use_cash`) + SUM(`use_card`)) * 100 AS 'sales' FROM gl_garage_state " \
+                                                             "WHERE `end_time` > date_format(curdate( ), '%%Y-%%m-%%d' ) AND `device_addr` = %s"
+                                        curs.execute(get_garage_sales_q, device['addr'])
+                                        garage_res = curs.fetchone()
+
+                                        if garage_res['sales']:
+                                            temp_state['sales'] = int(garage_res['sales'])
+
+                                    # 진공 금일 매출 저장
+                                    if state[5] == 'V':
+                                        get_air_sales_q = "SELECT (SUM(`air_cash`) + SUM(`air_card`)) * 100 AS 'sales' FROM gl_air_state " \
+                                                          "WHERE `end_time` > date_format(curdate( ), '%%Y-%%m-%%d' ) AND `device_addr` = %s"
+                                        curs.execute(get_air_sales_q, device['addr'])
+                                        air_res = curs.fetchone()
+
+                                        if air_res['sales']:
+                                            temp_state['sales'] = int(air_res['sales'])
+
+                                    # 매트트 금일 매출 저장
+                                    if state[5] == 'M':
+                                        get_mate_sales_q = "SELECT (SUM(`mate_cash`) + SUM(`mate_card`)) * 100 AS 'sales' FROM gl_mate_state " \
+                                                           "WHERE `end_time` > date_format(curdate( ), '%%Y-%%m-%%d' ) AND `device_addr` = %s"
+                                        curs.execute(get_mate_sales_q, device['addr'])
+                                        mate_res = curs.fetchone()
+
+                                        if mate_res['sales']:
+                                            temp_state['sales'] = int(mate_res['sales'])
 
                                     # 셀프 / Garage 동작 상태 저장
                                     if (state[5:7] == 'SR' or state[5:7] == 'GR') and state[62:64] == 'CH' and state_len == 64:
@@ -699,6 +752,7 @@ class Device:
                                                            "WHERE `type` = %s AND `addr` = %s"
                                             curs.execute(t_update_qry, (cash, card, master, version, device['type'], device['addr']))
                                             conn.commit()
+
                                     # 진공 / 매트 / 리더(매트) 저장값 없는 대기 동작
                                     if (state[5:7] == 'VN' or state[5:7] == 'MN' or state[5:7] == 'RN') and state[38:40] == 'CH' and state_len == 40:
                                         check_sum = str(self.get_checksum(orgin[:36])).replace(" ", "0")
@@ -765,7 +819,6 @@ class Device:
                                     #     trans += "CH"  # ETX
                                     #     trans = trans.encode("utf-8")
                                     #     state = ser.readline(ser.write(bytes(trans)))
-
                                 state_list.append(temp_state)
                             except Exception as e:
                                 print("From get_device_state for 485 : ", e)
@@ -923,6 +976,12 @@ class Device:
                 pass
                 # self.set_time()
             print("1 loop 종료")
+        # return state_list
+
+    # noinspection PyMethodMayBeStatic
+    def get_device_state(self):
+        # if (self.FLAG_MAIN == 'monitor' or self.FLAG_MAIN == 'cancel') and self.FLAG_STATE == 'stop':
+        #     self.main_thread(1)
         return state_list
 
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -937,6 +996,8 @@ class Device:
 
         # 반환 값
         self_config_list = []
+
+        time.sleep(3)
         
         try:
             # 485 연결
@@ -1480,6 +1541,7 @@ class Device:
         except Exception as ex1:
             print('오류를 알 수 없습니다.', ex1)
         finally:
+            # self.main_thread(1)
             pass
         return {'result': self_config_list}
 
@@ -1492,6 +1554,7 @@ class Device:
     def set_self_config(self, args):
         # 반환 값
         returun_res = '1'
+        time.sleep(1)
         print(args)
 
         # args 파싱
@@ -1671,6 +1734,7 @@ class Device:
     def get_air_config(self):
         # 반환 값
         air_config_list = []
+        time.sleep(1)
 
         try:
             # 485 연결
@@ -1894,6 +1958,7 @@ class Device:
     def set_air_config(self, args):
         # 반환 값
         returun_res = '1'
+        time.sleep(1)
 
         # args 파싱
         device_addr = str(args['device_addr']).rjust(2, '0')                    # 장비 주소
@@ -1984,6 +2049,7 @@ class Device:
     def get_mate_config(self):
         # 반환 값
         mate_config_list = []
+        time.sleep(1)
 
         try:
             # 485 연결
@@ -2216,6 +2282,7 @@ class Device:
     def set_mate_config(self, args):
         # 반환 값
         returun_res = '1'
+        time.sleep(1)
 
         print(args)
 
@@ -2314,6 +2381,7 @@ class Device:
     def get_charger_config(self):
         # 반환 값
         charger_config_list = []
+        time.sleep(1)
 
         try:
             # 485 연결
@@ -2528,6 +2596,7 @@ class Device:
     # noinspection PyMethodMayBeStatic
     def set_charger_config(self, args):
         # 반환 값
+        time.sleep(1)
         returun_res = '1'
 
         # args 파싱
@@ -2649,8 +2718,8 @@ class Device:
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     12. 기기 주소 변경
     device_type, before_addr, after_addr 3개의 인자를 받아 장비의 주소를 변경한다.
-    after_addr을 1씩 늘려가며 현재 설정되어 있는 가장 큰 주소값을 찾고, 그 주소에 1을
-    더해 임시 저장 주소로 사용한다.
+    after_addr을 1씩 늘려가며 현재 설정되어 있는 가장 큰 주소값을 찾고,
+    그 주소에 1을 더해 임시 저장 주소로 사용한다.
     임시 저장 주소가 변경하고자하는 주소와 같을 경우는 바로 변경 작업을 하고,
     다를 경우 아래와 같은 순서로 변경을 실시한다. 
     1. after -> temp
@@ -2986,20 +3055,22 @@ class Device:
     메인 스레드를 호출함.
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     # noinspection PyMethodMayBeStatic
-    def thread_monitor(self, second=600):
+    def thread_monitor(self):
         res = 0
-        for i in range(1,12):
-            time.sleep(1)
-            if (self.FLAG_MAIN == 'monitor' or self.FLAG_MAIN == 'cancel') and self.FLAG_STATE == 'stop':
+        for i in range(1,13):
+            print("loop : ", i)
+            print("FLAG_MAIN", self.FLAG_MAIN)
+            print("FLAG_STATE", self.FLAG_STATE)
+            if self.FLAG_MAIN == 'cancel' and self.FLAG_STATE == 'stop':
                 res += 1
         if res >= 10:
-            self.main_thread(4)
+            self.main_thread(1)
             res = 0
         else:
             res = 0
-        self.state_monitor = threading.Timer(second, self.thread_monitor)
-        self.state_monitor.daemon = True
-        self.state_monitor.start()
+        # self.state_monitor = threading.Timer(second, self.thread_monitor)
+        # self.state_monitor.daemon = True
+        # self.state_monitor.start()
 
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     17. 게러지 설정 불러오기
