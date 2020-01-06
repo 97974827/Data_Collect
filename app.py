@@ -58,6 +58,17 @@ try :
         elif str(res['enable_card']) == '0':
             gls_config.ENABLE_CARD = True
 
+        # MANAGER_CODE 설정
+        manager_qry = "SELECT pos.manager_no from gl_pos_config AS `pos`"
+        curs.execute(manager_qry)
+        manager_res = curs.fetchone()
+        if str(manager_res['manager_no']) == '1' or str(manager_res['manager_no']) == '4':
+            gls_config.MANAGER_CODE = '01'
+        elif str(manager_res['manager_no']) == '3' or str(manager_res['manager_no']) == '5':
+            gls_config.MANAGER_CODE = '03'
+        elif str(manager_res['manager_no']) == '2':
+            gls_config.MANAGER_CODE = '02'
+
         # 485 쓰레드 설정
         get_charger_state = tch.get_charger_state(10)
         # update_vip = ps.update_vip(10)
@@ -233,10 +244,17 @@ class GetChargerConfig(Resource):
 class GetReaderConfig(Resource):
     # noinspection PyMethodMayBeStatic
     def post(self):
+        dv.USE = True
+        dv.USE_EACH = False
+        dv.TIME_USE = True
+        dv.TIME_USE_EACH = False
+        dv.device_state_thread.cancel()
+        dv.FLAG_MAIN = 'cancel'
+        dv.FLAG_STATE = 'stop'
         reader_config = dv.get_reader_config()
-        time.sleep(0.1)
-        dv.main_thread(1)
-        return {"reader_config": reader_config}
+        # time.sleep(0.1)
+        # dv.main_thread(1)
+        return reader_config
 
 
 # 터치 충전기 설정 불러오기 (device->DB->POS)
@@ -267,7 +285,7 @@ class GetKioskConfig(Resource):
         dv.device_state_thread.cancel()
         dv.FLAG_MAIN = 'cancel'
         dv.FLAG_STATE = 'stop'
-        res = ps.get_kiosk_config()
+        res  = ps.get_kiosk_config()
         time.sleep(0.1)
         dv.main_thread(1)
         return {'result': res}
@@ -504,15 +522,20 @@ class SetReaderConfig(Resource):
         dv.FLAG_MAIN = 'cancel'
         dv.FLAG_STATE = 'stop'
         parser = reqparse.RequestParser()
+        parser.add_argument('device_addr', type=str)
+        parser.add_argument('reader_init_money', type=str)
+        parser.add_argument('reader_con_money', type=str)
+        parser.add_argument('reader_cycle_money', type=str)
+        parser.add_argument('reader_con_enable', type=str)
+        parser.add_argument('reader_init_pulse', type=str)
+        parser.add_argument('reader_con_pulse', type=str)
+        parser.add_argument('reader_pulse_duty', type=str)
 
-        parser.add_argument('query', type=str)
         args = parser.parse_args()
-        query = args['query']
 
-        res = dv.set_setiing(query)
-        dv.USE = False
-        dv.USE_EACH = True
-        dv.main_thread(10)
+        res = dv.set_reader_config(args)
+        time.sleep(1)
+
         # 디바이스에서 전송된 값 전송
         return {'result': res}
 
@@ -1228,6 +1251,7 @@ class GetCreditDaysSales(Resource):
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
  ****************************** Uri Path 설정 *********************************
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
 api.add_resource(StartThread, '/start_thread')                          # 메인 쓰레드 실행
 
 api.add_resource(GetReaderConfig, '/get_reader_config')                 # 리더기 매트 설정 (PCB->DB->POS)
