@@ -322,7 +322,7 @@ class Device:
                                         if air_res['sales']:
                                             temp_state['sales'] = int(air_res['sales'])
 
-                                    # 매트트 금일 매출 저장
+                                    # 매트 금일 매출 저장
                                     if state[5] == 'M':
                                         get_mate_sales_q = "SELECT (SUM(`mate_cash`) + SUM(`mate_card`)) * 100 AS 'sales' FROM gl_mate_state " \
                                                            "WHERE `end_time` > date_format(curdate( ), '%%Y-%%m-%%d' ) AND `device_addr` = %s"
@@ -331,6 +331,16 @@ class Device:
 
                                         if mate_res['sales']:
                                             temp_state['sales'] = int(mate_res['sales'])
+
+                                    # 리더기 금일 매출 저장
+                                    if state[5] == 'R':
+                                        get_reader_sales_q = "SELECT (SUM(`reader_cash`) + SUM(`reader_card`)) * 100 AS 'sales' FROM gl_reader_state " \
+                                                             "WHERE `end_time` > date_format(curdate( ), '%%Y-%%m-%%d' ) AND `device_addr` = %s"
+                                        curs.execute(get_reader_sales_q, device['addr'])
+                                        reader_res = curs.fetchone()
+
+                                        if reader_res['sales']:
+                                            temp_state['sales'] = int(reader_res['sales'])
 
                                     # 셀프 / Garage 동작 상태 저장
                                     if (state[5:7] == 'SR' or state[5:7] == 'GR') and state[62:64] == 'CH' and state_len == 64:
@@ -394,6 +404,8 @@ class Device:
                                             temp_state['use_cash'] = int(state[32:37]) * 100
                                             temp_state['use_card'] = int(state[37:42]) * 100
                                             temp_state['use_master'] = int(state[42:47]) * 100
+                                            # if state[5:7] == 'RR':
+                                            #     temp_state['remain_time'] = '0000'
                                             temp_state['remain_time'] = state[47:51]
                                             temp_state['card_num'] = state[51:59]
 
@@ -657,6 +669,79 @@ class Device:
                                             trans = trans.encode("utf-8")
                                             state = ser.readline(ser.write(bytes(trans))+ 20)
 
+                                    # 리더기 저장값 있는 데이터
+                                    if state[5:7] == 'RW' and state[59:61] == 'CH' and state_len == 61:
+                                        check_sum = str(self.get_checksum(orgin[:57])).replace(" ", "0")
+                                        res_check_sum = state[57:59]
+                                        if check_sum == res_check_sum:
+                                            year = state[14:16]
+                                            month = state[16:18]
+                                            day = state[18:20]
+                                            s_h = state[20:22]
+                                            s_m = state[22:24]
+                                            s_s = state[24:26]
+                                            e_h = state[26:28]
+                                            e_m = state[28:30]
+                                            e_s = state[30:32]
+                                            card_num = state[32:40]
+                                            remain_card = state[40:45]
+                                            card_use = state[45:49]
+                                            cash_use = state[49:53]
+                                            master_use = state[53:57]
+                                            start_time = "20" + year + "-" + month + "-" + day + " " \
+                                                         + s_h + ":" + s_m + ":" + s_s
+                                            end_time = "20" + year + "-" + month + "-" + day + " " \
+                                                       + e_h + ":" + e_m + ":" + e_s
+
+                                            # 시간 값 검사
+                                            # 현재 시간 정보 추출
+                                            t_year = datetime.today().strftime('%y')
+                                            t_month = datetime.today().strftime('%m')
+                                            t_day = datetime.today().strftime('%d')
+                                            t_hour = datetime.today().strftime('%H')
+                                            t_minute = datetime.today().strftime('%M')
+                                            t_second = datetime.today().strftime('%S')
+                                            if t_year != year or int(month) == 0 or int(month) > 12 or int(day) == 0 or int(day) > 31 or e_m != t_minute:
+                                                start_time = datetime.today().strftime('%Y-%m-%d %H:%M:%S')
+                                                end_time = datetime.today().strftime('%Y-%m-%d %H:%M:%S')
+
+                                                # 시간 설정 값 보내기
+                                                time_trans = "GL029TS"
+                                                time_trans += str(gls_config.MANAGER_CODE)
+                                                time_trans += str(device['type']).rjust(2, "0")
+                                                time_trans += str(device['addr'])
+                                                time_trans += str(t_year)
+                                                time_trans += str(t_month)
+                                                time_trans += str(t_day)
+                                                time_trans += str(t_hour)
+                                                time_trans += str(t_minute)
+                                                time_trans += str(t_second)
+                                                time_trans += self.get_checksum(time_trans)
+                                                time_trans += "CH"  # ETX
+                                                time_trans = time_trans.encode("utf-8")
+                                                res = ser.readline(ser.write(bytes(time_trans)) + 100)
+                                                print("Time Trans : ", time_trans)
+                                                print("Time Set : ", res)
+
+                                            mate_insert = "INSERT INTO gl_reader_state(`device_addr`, `card_num`, " \
+                                                          "`reader_cash`, `reader_card`, `remain_card`, " \
+                                                          "`master_card`, `start_time`, `end_time`) " \
+                                                          "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+                                            curs.execute(mate_insert,
+                                                         (device['addr'], card_num, cash_use, card_use,
+                                                          remain_card, master_use, start_time, end_time))
+                                            conn.commit()
+
+                                            # OK SIGN
+                                            trans = "GL017OK"
+                                            trans += str(gls_config.MANAGER_CODE)
+                                            trans += str(device['type']).rjust(2, '0')
+                                            trans += str(device['addr'])
+                                            trans += self.get_checksum(trans)
+                                            trans += "CH"  # ETX
+                                            trans = trans.encode("utf-8")
+                                            state = ser.readline(ser.write(bytes(trans)) + 20)
+
                                     # Garage 저장값 있는 데이터
                                     if state[5:7] == 'GW' and state[89:91] == 'CH' and state_len == 91:
                                         check_sum = str(self.get_checksum(orgin[:87])).replace(" ", "0")
@@ -769,56 +854,6 @@ class Device:
                                             curs.execute(t_update_qry, (cash, card, master, version, device['type'], device['addr']))
                                             conn.commit()
 
-                                    # 리더 상태 저장
-                                    # if state[5:7] == 'RW':
-                                    #     year = state[13:15]
-                                    #     month = state[15:17]
-                                    #     day = state[17:19]
-                                    #     s_h = state[19:21]
-                                    #     s_m = state[21:23]
-                                    #     s_s = state[23:25]
-                                    #     e_h = state[25:27]
-                                    #     e_m = state[27:29]
-                                    #     e_s = state[29:31]
-                                    #     card_num = state[31:39]
-                                    #     remain_card = state[39:44]
-                                    #     master_use = state[44:48]
-                                    #     use_time = state[48:52]
-                                    #     cash_use = state[52:56]
-                                    #     card_use = state[56:60]
-                                    #     start_time = "20" + year + "-" + month + "-" + day + " " \
-                                    #                  + s_h + ":" + s_m + ":" + s_s
-                                    #     end_time = "20" + year + "-" + month + "-" + day + " " \
-                                    #                + e_h + ":" + e_m + ":" + e_s
-                                    #     checkSUM = state[60:62]
-                                    #
-                                    #     # 시간 값 검사
-                                    #     today_year = datetime.today().strftime('%y')
-                                    #     if today_year != year or int(month) == 0 or int(month) > 12 or int(day) == 0 or int(day) > 31:
-                                    #         start_time = datetime.today().strftime('%Y-%m-%d %H:%M:%S')
-                                    #         end_time = datetime.today().strftime('%Y-%m-%d %H:%M:%S')
-                                    #
-                                    #     # 데이터 저장
-                                    #     reader_insert = "INSERT INTO gl_reader_state(`device_addr`, " \
-                                    #                     "`card_num`, `reader_time`, `reader_cash`, " \
-                                    #                     "`reader_card`, `remain_card`, `master_card`, " \
-                                    #                     "`start_time`, `end_time`) " \
-                                    #                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-                                    #     curs.execute(reader_insert,
-                                    #                  (device['addr'], card_num, use_time, cash_use, card_use,
-                                    #                   remain_card, master_use, start_time, end_time))
-                                    #
-                                    #     conn.commit()
-                                    #
-                                    #     # OK SIGN
-                                    #     trans = "GL016OK"
-                                    #     trans += str(gls_config.MANAGER_CODE)
-                                    #     trans += str(device['type'])
-                                    #     trans += str(device['addr'])
-                                    #     trans += self.get_checksum(trans)
-                                    #     trans += "CH"  # ETX
-                                    #     trans = trans.encode("utf-8")
-                                    #     state = ser.readline(ser.write(bytes(trans)))
                                 state_list.append(temp_state)
                             except Exception as e:
                                 print("From get_device_state for 485 : ", e)
@@ -885,6 +920,7 @@ class Device:
                                         current_charge = ''
                                         remain_card = ''
                                         card_num = ''
+
                                         # 충전 정보 저장
                                         if state[5:7] == 'CW' and etx == 'CH':
                                             year = state[14:16]
@@ -3940,7 +3976,32 @@ class Device:
                             config['pause_count'] = row['pause_count']
 
                     get_res = self.set_garage_config(config)
+                # reader
+                if str(type) == str(gls_config.READER):
+                    get_reader = "SELECT * FROM gl_reader_config WHERE `device_addr` = %s ORDER BY `input_date` DESC LIMIT 1"
+                    curs.execute(get_reader, copy)
+                    res_reader_config = curs.fetchall()
 
+                    config = OrderedDict()
+                    config['device_addr'] = target
+
+                    for row in res_reader_config:
+                        if row['reader_init_money']:
+                            config['reader_init_money'] = int(row['reader_init_money']) * 100
+                        if row['reader_con_money']:
+                            config['reader_con_money'] = int(row['reader_con_money']) * 100
+                        if row['reader_cycle_money']:
+                            config['reader_cycle_money'] = int(row['reader_cycle_money']) * 100
+                        if row['reader_con_enable']:
+                            config['reader_con_enable'] = row['reader_con_enable']
+                        if row['reader_init_pulse']:
+                            config['reader_init_pulse'] = row['reader_init_pulse']
+                        if row['reader_con_pulse']:
+                            config['reader_con_pulse'] = row['reader_con_pulse']
+                        if row['reader_pulse_duty']:
+                            config['reader_pulse_duty'] = row['reader_pulse_duty']
+
+                    get_res = self.set_reader_config(config)
         except Exception as ex1:
             print('오류를 알 수 없습니다.', ex1)
             get_res = '0'
@@ -3948,14 +4009,288 @@ class Device:
             conn.close()
         return get_res
 
-
-    # TODO : 추후 주일 등 다른 회사에서 사용
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-    # 리더(매트) 설정 불러오기
-    프로토콜이 없음.
+    20. 리더기 설정 불러오기
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     # noinspection PyMethodMayBeStatic
     def get_reader_config(self):
-        return
+        # 반환 값
+        reader_config_list = []
+        time.sleep(1)
 
+        try:
+            # 485 연결
+            ser = serial.Serial(self.PORT, self.BAUD, timeout=0.1)
 
+            # 데이터 수집 장치 접속 설정
+            conn = pymysql.connect(host=gls_config.MYSQL_HOST, user=gls_config.MYSQL_USER, password=gls_config.MYSQL_PWD,
+                                   charset=gls_config.MYSQL_SET, db=gls_config.MYSQL_DB)
+            curs = conn.cursor(pymysql.cursors.DictCursor)
+
+            try:
+                with conn.cursor():
+                    # 장비 주소 추출 쿼리
+                    query = "SELECT `addr` FROM gl_device_list WHERE `type` = %s"
+                    # 장비 설정 추출 쿼리
+                    db_query = "SELECT * FROM gl_reader_config WHERE `device_addr` = %s ORDER BY `input_date` DESC " \
+                               "LIMIT 1"
+
+                    # 장비 주소 추출
+                    curs.execute(query, gls_config.READER)
+                    addr_res = curs.fetchall()
+
+                    # 각 주소별 PCB로부터 설정 값 불러오기
+                    for row in addr_res:
+                        # PCB 설정 저장 딕셔너리
+                        reader_config = OrderedDict()
+                        # DB 설정 저장 딕셔너리
+                        db_reader_config = OrderedDict()
+                        trans = "GL017CL"
+                        trans += str(gls_config.MANAGER_CODE)
+                        trans += str(gls_config.READER).rjust(2, '0')
+                        trans += row['addr']
+                        trans += self.get_checksum(trans)
+                        trans += "CH"
+                        trans = trans.encode("utf-8")
+                        try:
+                            ser.write(bytes(trans))
+
+                            line = []
+
+                            while 1:
+                                temp = ser.read()
+                                if temp:
+                                    line.append(temp.decode('utf-8'))
+                                else:
+                                    orgin = ''.join(line)
+                                    res = orgin.replace(" ", "0")
+                                    break
+
+                            # 체크섬 정보
+                            res_len = len(res)
+                            stx = res[0:2]
+                            etx = res[31:33]
+                            res_check_sum = res[29:31]
+                            check_sum = str(self.get_checksum(orgin[:29])).replace(" ", "0")
+
+                            if stx == 'GL' and etx == 'CH' and res_len == 33 and res_check_sum == check_sum:
+                                print("get_reader_config : ", res)
+
+                                # 응답 프르토콜 분할
+                                # 디바이스 정보
+                                reader_config['device_addr'] = res[9:11]  # 장비 주소
+                                reader_config['state'] = '1'  # 통신 상태
+
+                                # 설정 값
+                                reader_config['reader_init_money'] = int(res[11:14]) * 100  # 초기 동작 금액
+                                reader_config['reader_con_money'] = int(res[14:17]) * 100  # 연속 동작 금액
+                                reader_config['reader_cycle_money'] = int(res[17:20]) * 100  # 한 사이클 이용 금액
+                                reader_config['reader_con_enable'] = int(res[20])  # 연속 차감 유무
+                                reader_config['reader_init_pulse'] = int(res[21:23])  # 초기 출력 펄스
+                                reader_config['reader_con_pulse'] = int(res[23:25])  # 연속 출력 펄스
+                                reader_config['reader_pulse_duty'] = int(res[25:29])  # 펄스 듀티
+
+                                # CheckSum
+                                reader_config['check_sum'] = res[35:37]
+                            else:
+                                reader_config['device_addr'] = str(row['addr'])  # 장비 주소
+                                reader_config['state'] = '0'  # 통신 상태
+                        # except Exception as e:
+                        #     print("From get_air_config except : ", e)
+                        finally:
+                            pass
+
+                        # 반환할 리스트에 저장
+                        reader_config_list.append(reader_config)
+
+                        # DB 에서 주소별 설정값 불러오기
+                        curs.execute(db_query, row['addr'])
+                        db_config = curs.fetchall()
+                        for db_row in db_config:
+                            # 기본 설정
+                            db_reader_config['device_addr'] = db_row['device_addr']
+
+                            # 설정 값
+                            db_reader_config['reader_init_money'] = int(db_row['reader_init_money']) * 100
+                            db_reader_config['reader_con_money'] = int(db_row['reader_con_money']) * 100
+                            db_reader_config['reader_cycle_money'] = int(db_row['reader_cycle_money']) * 100
+                            db_reader_config['reader_con_enable'] = db_row['reader_con_enable']
+                            db_reader_config['reader_init_pulse'] = db_row['reader_init_pulse']
+                            db_reader_config['reader_con_pulse'] = db_row['reader_con_pulse']
+                            db_reader_config['reader_pulse_duty'] = db_row['reader_pulse_duty']
+
+                            if reader_config['state'] != '0':
+                                # DB - PCB 설정값 비교 
+                                diff = '0'  # 설정 이상 비교 플래그
+                                diff_set = OrderedDict()  # 설정 이상 정보 저장 딕셔너리
+                                # 설정 값
+                                if db_reader_config['device_addr'] != reader_config['device_addr']:
+                                    diff = '1'
+                                    diff_set['state'] = '2'
+                                    diff_set['device_addr'] = row['addr']
+                                    diff_set['db_addr'] = db_reader_config['device_addr']
+                                    diff_set['reader_addr'] = reader_config['device_addr']
+
+                                if db_reader_config['reader_init_money'] != reader_config['reader_init_money']:
+                                    diff = '1'
+                                    diff_set['state'] = '2'
+                                    diff_set['device_addr'] = row['addr']
+                                    diff_set['db_reader_init_money'] = db_reader_config['reader_init_money']
+                                    diff_set['reader_init_money'] = reader_config['reader_init_money']
+
+                                if db_reader_config['reader_con_money'] != reader_config['reader_con_money']:
+                                    diff = '1'
+                                    diff_set['state'] = '2'
+                                    diff_set['device_addr'] = row['addr']
+                                    diff_set['db_reader_con_money'] = db_reader_config['reader_con_money']
+                                    diff_set['reader_con_money'] = reader_config['reader_con_money']
+
+                                if db_reader_config['reader_cycle_money'] != reader_config['reader_cycle_money']:
+                                    diff = '1'
+                                    diff_set['state'] = '2'
+                                    diff_set['device_addr'] = row['addr']
+                                    diff_set['db_reader_cycle_money'] = db_reader_config['reader_cycle_money']
+                                    diff_set['reader_cycle_money'] = reader_config['reader_cycle_money']
+
+                                if db_reader_config['reader_con_enable'] != reader_config['reader_con_enable']:
+                                    diff = '1'
+                                    diff_set['state'] = '2'
+                                    diff_set['device_addr'] = row['addr']
+                                    diff_set['db_reader_con_enable'] = db_reader_config['reader_con_enable']
+                                    diff_set['reader_con_enable'] = reader_config['reader_con_enable']
+
+                                if db_reader_config['reader_init_pulse'] != reader_config['reader_init_pulse']:
+                                    diff = '1'
+                                    diff_set['state'] = '2'
+                                    diff_set['device_addr'] = row['addr']
+                                    diff_set['db_reader_init_pulse'] = db_reader_config['reader_init_pulse']
+                                    diff_set['reader_init_pulse'] = reader_config['reader_init_pulse']
+
+                                if db_reader_config['reader_con_pulse'] != reader_config['reader_con_pulse']:
+                                    diff = '1'
+                                    diff_set['state'] = '2'
+                                    diff_set['device_addr'] = row['addr']
+                                    diff_set['db_reader_con_pulse'] = db_reader_config['reader_con_pulse']
+                                    diff_set['reader_con_pulse'] = reader_config['reader_con_pulse']
+                                if db_reader_config['reader_pulse_duty'] != reader_config['reader_pulse_duty']:
+                                    diff = '1'
+                                    diff_set['state'] = '2'
+                                    diff_set['device_addr'] = row['addr']
+                                    diff_set['db_reader_pulse_duty'] = db_reader_config['reader_pulse_duty']
+                                    diff_set['reader_pulse_duty'] = reader_config['reader_pulse_duty']
+
+                                if diff == '1':
+                                    insert_input_date = datetime.today().strftime("%Y-%m-%d %H:%M:%S")
+                                    new_reader_config_qry = "INSERT INTO gl_reader_config(`device_addr`, `reader_init_money`, `reader_con_money`, " \
+                                                            "`reader_cycle_money`, `reader_con_enable`, `reader_init_pulse`, `reader_con_pulse`, `reader_pulse_duty`, `input_date`) " \
+                                                          "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                                    curs.execute(new_reader_config_qry, (reader_config['device_addr'],
+                                                                       str(reader_config['reader_init_money'] // 100).rjust(3, '0'),
+                                                                       str(reader_config['reader_con_money'] // 100).rjust(3, '0'),
+                                                                       str(reader_config['reader_cycle_money'] // 100).rjust(3, '0'),
+                                                                       reader_config['reader_con_enable'],
+                                                                       reader_config['reader_init_pulse'],
+                                                                       reader_config['reader_con_pulse'],
+                                                                       reader_config['reader_pulse_duty'],
+                                                                       insert_input_date))
+                                    conn.commit()
+            finally:
+                conn.close()
+        # except UnboundLocalError as ex:
+        #     print('엑세스 거부', ex)
+        # except FileNotFoundError as ex:
+        #     print('지정된 포트를 찾을 수 없습니다.', ex)
+        # except UnicodeDecodeError as ex1:
+        #     print('디코딩 오류', ex1)
+        # except Exception as ex1:
+        #     print('오류를 알 수 없습니다.', ex1)
+        finally:
+            pass
+        return {'result': reader_config_list}
+
+    """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+    20. 리더기 설정 
+    """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+    # noinspection PyMethodMayBeStatic
+    def set_reader_config(self, args):
+        # 반환 값
+        returun_res = '1'
+        time.sleep(1)
+
+        print(args)
+
+        # args 파싱
+        device_addr = str(args['device_addr']).rjust(2, '0')  # 장비 주소
+        reader_init_money = str(int(args['reader_init_money']) // 100).rjust(3, '0')  # 매트 초기 동작 금액
+        reader_con_money = str(int(args['reader_con_money']) // 100).rjust(3, '0')  # 매트 연속 동작 금액
+        reader_cycle_money = str(int(args['reader_cycle_money']) // 100).rjust(3, '0')  # 한 사이클 이용 금액
+        reader_con_enable = args['reader_con_enable']  # 매트 연속 동장 유무
+        reader_init_pulse = str(args['reader_init_pulse']).rjust(2, '0')  # 초기 출력 펄스
+        reader_con_pulse = str(args['reader_con_pulse']).rjust(2, '0')  # 연속 출력 펄스
+        reader_pulse_duty = str(args['reader_pulse_duty']).rjust(4, '0')  # 펄스 듀티
+
+        try:
+            # 485 연결
+            ser = serial.Serial(self.PORT, self.BAUD, timeout=1)
+
+            # 데이터 수집 장치 접속 설정
+            conn = pymysql.connect(host=gls_config.MYSQL_HOST, user=gls_config.MYSQL_USER, password=gls_config.MYSQL_PWD,
+                                   charset=gls_config.MYSQL_SET, db=gls_config.MYSQL_DB)
+            curs = conn.cursor(pymysql.cursors.DictCursor)
+
+            with conn.cursor():
+
+                # 입력 날짜 생성
+                insert_input_date = datetime.today().strftime("%Y-%m-%d %H:%M:%S")
+
+                # DB 저장
+                insert_reader_config_q = "INSERT INTO gl_reader_config(`device_addr`, `reader_init_money`, " \
+                                       "`reader_con_money`,`reader_cycle_money`, " \
+                                       "`reader_con_enable`, `reader_init_pulse`, `reader_con_pulse`, " \
+                                       "`reader_pulse_duty`, `input_date`) " \
+                                       "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                curs.execute(insert_reader_config_q, (device_addr, reader_init_money, reader_con_money,
+                                                    reader_cycle_money, reader_con_enable, reader_init_pulse,
+                                                    reader_con_pulse, reader_pulse_duty, insert_input_date))
+                conn.commit()
+
+                trans = "GL035RS"
+                trans += str(gls_config.MANAGER_CODE)
+                trans += str(gls_config.READER).rjust(2, '0')
+                trans += device_addr
+                trans += reader_init_money
+                trans += reader_con_money
+                trans += reader_cycle_money
+                trans += reader_con_enable
+                trans += reader_init_pulse
+                trans += reader_con_pulse
+                trans += reader_pulse_duty
+                trans += self.get_checksum(trans)
+                trans += "CH"  # ETX
+                trans = trans.encode("utf-8")
+
+                print("reader_set : ", trans)
+
+                try:
+                    ser.readline(ser.write(bytes(trans)))
+
+                except Exception as e:
+                    print("transErr : ", e)
+                    returun_res = '0'
+                finally:
+                    conn.close()
+        except UnboundLocalError as ex:
+            print('엑세스 거부', ex)
+            returun_res = '0'
+        except FileNotFoundError as ex:
+            print('지정된 포트를 찾을 수 없습니다.', ex)
+            returun_res = '0'
+        except UnicodeDecodeError as ex1:
+            print('디코딩 오류', ex1)
+            returun_res = '0'
+        except Exception as ex1:
+            print('오류를 알 수 없습니다.', ex1)
+            returun_res = '0'
+        finally:
+            pass
+        return returun_res
