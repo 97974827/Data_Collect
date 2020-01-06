@@ -25,7 +25,7 @@ READER = 9
 GARAGE = 10
 
 # 관리 업체
-MANAGER_CODE = '01'
+MANAGER_CODE = '00'
 
 # 충전기 기본 보너스 설정
 DEFAULT_BONUS = 2
