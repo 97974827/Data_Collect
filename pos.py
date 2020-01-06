@@ -1703,7 +1703,7 @@ class Pos:
                         temp_dict['enable_type'] = '매트'
                         temp_dict['credit_money'] = '0'
                     elif str(row['device_type']) == str(gls_config.READER):
-                        temp_dict['enable_type'] = '매트'
+                        temp_dict['enable_type'] = '리더'
                         temp_dict['credit_money'] = '0'
                     elif str(row['device_type']) == str(gls_config.GARAGE):
                         temp_dict['enable_type'] = self.get_self_detail(row['no'], 'garage')
@@ -2525,45 +2525,53 @@ class Pos:
                         # 반환할 리스트에 저장
                         device_sales_list.append(mate_sales)
 
-                # # 매트(리더)
-                # # 장비명
-                # curs.execute(device_name_qry, gls_config.READER)
-                # reader_name_temp = curs.fetchall()
-                # for row in reader_name_temp:
-                #     reader_name = row['name']
-                # # 장비 주소
-                # curs.execute(device_addr_qry, gls_config.READER)
-                # reader_addr = curs.fetchall()
-                #
-                # # 장비 주소 별 매출
-                # for row in reader_addr:
-                #     curs.execute(get_use_device_qry, (gls_config.READER, row['addr']))
-                #     reader_res = curs.fetchall()
-                #
-                #     for reader_row in reader_res:
-                #         # 값을 저장할 딕셔너리 초기화
-                #         reader_sales = OrderedDict()
-                #         reader_sales['device_addr'] = '0'
-                #         reader_sales['device_name'] = '0'
-                #         reader_sales['device_type'] = gls_config.READER
-                #         reader_sales['time'] = '0'
-                #         reader_sales['cash'] = '0'
-                #         reader_sales['card'] = '0'
-                #
-                #         # 실제 값 저장
-                #         reader_sales['device_addr'] = row['addr']
-                #         reader_sales['device_name'] = reader_name
-                #
-                #         # 소수점 절삭
-                #         if reader_row['cash']:
-                #             reader_sales['cash'] = int(reader_row['cash'])
-                #         if reader_row['card']:
-                #             reader_sales['card'] = int(reader_row['card'])
-                #         if reader_row['time']:
-                #             reader_sales['time'] = int(reader_row['time'])
-                #
-                #         # 반환할 리스트에 저장
-                #         device_sales_list.append(reader_sales)
+                # 매트
+                # 장비명
+                curs.execute(device_name_qry, gls_config.READER)
+                reader_name_temp = curs.fetchone()
+
+                # for row in mate_name_temp:
+                #     mate_name = row['name']
+                reader_name = reader_name_temp['name']
+
+                # 장비 주소
+                curs.execute(device_addr_qry, gls_config.READER)
+                reader_addr = curs.fetchall()
+
+                # 장비 주소 별 매출
+                for row in reader_addr:
+
+                    get_reader_ary = "SELECT reader.`device_addr`, sum(reader.`reader_cash`) * 100 AS 'cash', " \
+                                   "sum(reader.`reader_card`) * 100 AS 'card', " \
+                                   "sum(reader.`master_card`) * 100 AS 'master' " \
+                                   "FROM gl_reader_state AS reader WHERE reader.device_addr = %s"
+
+                    curs.execute(get_reader_ary, row['addr'])
+                    reader_res = curs.fetchall()
+
+                    for reader_row in reader_res:
+                        # 값을 저장할 딕셔너리 초기화
+                        reader_sales = OrderedDict()
+                        reader_sales['device_addr'] = '0'
+                        reader_sales['device_name'] = '0'
+                        reader_sales['device_type'] = gls_config.READER
+                        reader_sales['time'] = '0'
+                        reader_sales['cash'] = '0'
+                        reader_sales['card'] = '0'
+
+                        # 실제 값 저장
+                        reader_sales['device_addr'] = row['addr']
+                        reader_sales['device_name'] = reader_name
+                        # 소수점 절삭
+                        if reader_row['cash']:
+                            reader_sales['cash'] = int(reader_row['cash'])
+                        if reader_row['card']:
+                            reader_sales['card'] = int(reader_row['card'])
+                        if reader_row['master']:
+                            reader_sales['master'] = int(reader_row['master'])
+
+                        # 반환할 리스트에 저장
+                        device_sales_list.append(reader_sales)
 
                 # Garage
                 # 장비명
@@ -4831,6 +4839,14 @@ class Pos:
                 set_manager_no_q = "UPDATE gl_pos_config SET `manager_no` = %s, `enable_card` = %s, `auth_code` = %s "
                 curs.execute(set_manager_no_q, (manager_no, enable_card, card_binary))
                 conn.commit()
+
+                if manager_no =='1' or manager_no == '4':
+                    gls_config.MANAGER_CODE = '01'
+                elif manager_no == '2':
+                    gls_config.MANAGER_CODE = '02'
+                elif manager_no == '3' or manager_no == '5':
+                    gls_config.MANAGER_CODE = '03'
+
         except Exception as e:
             print("From get_master_config except : ", e)
             res = 0
