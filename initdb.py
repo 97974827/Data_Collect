@@ -4,9 +4,38 @@ import pymysql
 conn = pymysql.connect(host=gls_config.MYSQL_HOST, user=gls_config.MYSQL_USER, password=gls_config.MYSQL_PWD, charset=gls_config.MYSQL_SET, db=gls_config.MYSQL_DB)
 curs = conn.cursor(pymysql.cursors.DictCursor)
 
+# 리더기 초기화 테이블 만들기
 
 try:
     with conn.cursor():
+        try:
+            print("reset gl_reader_config...")
+            acd = "DELETE FROM gl_reader_config"
+            acr = "ALTER TABLE gl_reader_config auto_increment = 1 "
+            curs.execute(acd)
+            conn.commit()
+            curs.execute(acr)
+            conn.commit()
+        except Exception as e:
+            print("From reset_gl_reader_config except :", e)
+        finally:
+            print("completed ! ")
+
+
+        try:
+            print("reset gl_reader_state...")
+            asd = "DELETE FROM gl_reader_state"
+            asr = "ALTER TABLE gl_reader_state auto_increment = 1 "
+            curs.execute(asd)
+            conn.commit()
+            curs.execute(asr)
+            conn.commit()
+        except Exception as e:
+            print("From reset_gl_reader_state except : ", e)
+        finally:
+            print("completed ! ")
+
+
         try:
             print("reset gl_air_config...")
             acd = "DELETE FROM gl_air_config"
